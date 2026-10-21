@@ -22,6 +22,18 @@ int APS5_VABI sceCesMbcToUtf32le(const void*, const std::uint8_t*, std::uint32_t
 int APS5_VABI sceCesSbcToUcs2(const std::uint8_t*, std::uint8_t, std::uint16_t*);
 int APS5_VABI sceCesSbcToUtf16le(const std::uint8_t*, std::uint8_t, std::uint16_t*, std::uint32_t, std::uint32_t*);
 int APS5_VABI sceCesSbcToUtf32be(const std::uint8_t*, std::uint8_t, std::uint32_t*);
+int APS5_VABI sceCesUcs2ToEucJp(std::uint16_t, const void*, std::uint8_t*, std::uint32_t, std::uint32_t*);
+int APS5_VABI sceCesUcs2ToMbc(std::uint16_t, const void*, std::uint8_t*, std::uint32_t, std::uint32_t*);
+int APS5_VABI sceCesUcs2ToSbc(std::uint16_t, const std::uint8_t*, std::uint8_t*);
+int APS5_VABI sceCesUtf16beToEucJp(const std::uint16_t*, std::uint32_t, std::uint32_t*, const void*, std::uint8_t*, std::uint32_t, std::uint32_t*);
+int APS5_VABI sceCesUtf16leToMbc(const std::uint16_t*, std::uint32_t, std::uint32_t*, const void*, std::uint8_t*, std::uint32_t, std::uint32_t*);
+int APS5_VABI sceCesUtf16ToSbc(const std::uint16_t*, std::uint32_t, std::uint32_t*, const std::uint8_t*, std::uint8_t*);
+int APS5_VABI sceCesUtf32ToEucJp(std::uint32_t, const void*, std::uint8_t*, std::uint32_t, std::uint32_t*);
+int APS5_VABI sceCesUtf32leToEucJp(const std::uint32_t*, const void*, std::uint8_t*, std::uint32_t, std::uint32_t*);
+int APS5_VABI sceCesUtf32beToMbc(const std::uint32_t*, const void*, std::uint8_t*, std::uint32_t, std::uint32_t*);
+int APS5_VABI sceCesUtf32leToSbc(const std::uint32_t*, const std::uint8_t*, std::uint8_t*);
+int APS5_VABI sceCesUtf8ToEucJp(const std::uint8_t*, std::uint32_t, std::uint32_t*, const void*, std::uint8_t*, std::uint32_t, std::uint32_t*);
+int APS5_VABI sceCesUtf8ToMbc(const std::uint8_t*, std::uint32_t, std::uint32_t*, const void*, std::uint8_t*, std::uint32_t, std::uint32_t*);
 }
 
 namespace {
@@ -29,6 +41,8 @@ namespace {
 constexpr int InvalidParameter = static_cast<int>(0x805C0001u);
 constexpr int InvalidSource = static_cast<int>(0x805C0010u);
 constexpr int SourceEnd = static_cast<int>(0x805C0011u);
+constexpr int InvalidEncode = static_cast<int>(0x805C0014u);
+constexpr int Unassigned = static_cast<int>(0x805C0020u);
 constexpr int InvalidDestination = static_cast<int>(0x805C0030u);
 constexpr int DestinationEnd = static_cast<int>(0x805C0031u);
 
@@ -87,6 +101,54 @@ void CheckMultibyteToUnicode() {
     Require(sceCesSbcToUcs2(cp1252, 0x41, nullptr) == InvalidDestination, "a null UCS-2 target was taken");
 }
 
+void CheckUnicodeToMultibyte() {
+    std::uint8_t out[4] = {};
+    std::uint32_t used = 0;
+    std::uint32_t produced = 0;
+    Require(sceCesUcs2ToEucJp(0x3042, euc, out, 4, &produced) == 0 && produced == 2 && out[0] == 0xA4 && out[1] == 0xA2, "U+3042 is not EUC-JP A4 A2");
+    Require(sceCesUtf32ToEucJp(0x4E02, euc, out, 4, &produced) == 0 && produced == 3 && out[0] == 0x8F && out[1] == 0xB0 && out[2] == 0xA1, "U+4E02 is not EUC-JP 8F B0 A1");
+    Require(sceCesUcs2ToMbc(0x3042, sjis, out, 4, &produced) == 0 && produced == 2 && out[0] == 0x82 && out[1] == 0xA0, "U+3042 is not Shift-JIS 82 A0");
+    std::uint8_t sbc = 0;
+    Require(sceCesUcs2ToSbc(0x20AC, cp1252, &sbc) == 0 && sbc == 0x80, "U+20AC is not CP1252 0x80");
+    Require(sceCesUcs2ToSbc(0x3042, cp1252, &sbc) == Unassigned, "U+3042 was given a CP1252 byte");
+    Require(sceCesUcs2ToEucJp(0x3042, euc, out, 1, &produced) == DestinationEnd, "a short EUC-JP target was written");
+    Require(sceCesUcs2ToEucJp(0xD800, euc, out, 4, &produced) == InvalidEncode, "a surrogate UCS-2 value was encoded");
+    Require(sceCesUcs2ToEucJp(0x3042, sjis, out, 4, &produced) == InvalidParameter, "a Shift-JIS profile was taken as EUC-JP");
+    Require(sceCesUcs2ToEucJp(0x3042, euc, nullptr, 4, &produced) == InvalidDestination, "a null EUC-JP target was taken");
+    Require(sceCesUtf32ToEucJp(0x110000, euc, out, 4, &produced) == InvalidEncode, "a value past U+10FFFF was encoded");
+    Require(sceCesUtf32ToEucJp(0x1F600, euc, out, 4, &produced) == Unassigned, "U+1F600 was given an EUC-JP sequence");
+
+    const std::uint8_t beA[] = {0x30, 0x42};
+    std::uint16_t utf16be[1];
+    std::memcpy(utf16be, beA, sizeof(beA));
+    Require(sceCesUtf16beToEucJp(utf16be, 1, &used, euc, out, 4, &produced) == 0 && used == 1 && out[0] == 0xA4, "UTF-16BE U+3042 is not EUC-JP A4 A2");
+    const std::uint16_t lone[] = {0xDC00};
+    const std::uint16_t high[] = {0xD83D};
+    const std::uint16_t pair[] = {0xD83D, 0xDE00};
+    Require(sceCesUtf16leToMbc(lone, 1, &used, sjis, out, 4, &produced) == InvalidEncode, "a lone low surrogate was decoded");
+    Require(sceCesUtf16leToMbc(high, 1, &used, sjis, out, 4, &produced) == SourceEnd, "a high surrogate at the end was decoded");
+    Require(sceCesUtf16leToMbc(pair, 2, &used, sjis, out, 4, &produced) == Unassigned, "U+1F600 was given a Shift-JIS sequence");
+    Require(sceCesUtf16leToMbc(pair, 0, &used, sjis, out, 4, &produced) == SourceEnd, "an empty UTF-16 source was taken");
+    Require(sceCesUtf16leToMbc(nullptr, 1, &used, sjis, out, 4, &produced) == InvalidSource, "a null UTF-16 source was taken");
+    const std::uint16_t euroUnit[] = {0x20AC};
+    Require(sceCesUtf16ToSbc(euroUnit, 1, &used, cp1252, &sbc) == 0 && sbc == 0x80 && used == 1, "native UTF-16 U+20AC is not CP1252 0x80");
+
+    const std::uint32_t leA = 0x3042;
+    Require(sceCesUtf32leToEucJp(&leA, euc, out, 4, &produced) == 0 && out[0] == 0xA4 && out[1] == 0xA2, "UTF-32LE U+3042 is not EUC-JP A4 A2");
+    const std::uint8_t beBytes[] = {0x00, 0x00, 0x30, 0x42};
+    std::uint32_t beA32 = 0;
+    std::memcpy(&beA32, beBytes, sizeof(beA32));
+    Require(sceCesUtf32beToMbc(&beA32, sjis, out, 4, &produced) == 0 && out[0] == 0x82 && out[1] == 0xA0, "UTF-32BE U+3042 is not Shift-JIS 82 A0");
+    Require(sceCesUtf32beToMbc(nullptr, sjis, out, 4, &produced) == InvalidSource, "a null UTF-32 source was taken");
+    const std::uint32_t leEuro = 0x20AC;
+    Require(sceCesUtf32leToSbc(&leEuro, cp1252, &sbc) == 0 && sbc == 0x80, "UTF-32LE U+20AC is not CP1252 0x80");
+
+    const std::uint8_t utf8A[] = {0xE3, 0x81, 0x82};
+    Require(sceCesUtf8ToEucJp(utf8A, 3, &used, euc, out, 4, &produced) == 0 && used == 3 && produced == 2 && out[0] == 0xA4, "UTF-8 U+3042 is not EUC-JP A4 A2");
+    Require(sceCesUtf8ToMbc(utf8A, 2, &used, sjis, out, 4, &produced) == SourceEnd, "a cut UTF-8 sequence was decoded");
+    Require(sceCesUtf8ToMbc(utf8A, 3, &used, cp1252, out, 4, &produced) == Unassigned, "U+3042 was given a CP1252 byte through Mbc");
+}
+
 void CheckWholeEucJpTable() {
     std::uint32_t decoded = 0;
     for (std::uint32_t lead = 0xA1; lead <= 0xFE; ++lead) {
@@ -101,8 +163,10 @@ void CheckWholeEucJpTable() {
             Require(result == reference, "EUC-JP to UTF-16LE and to UCS-2 disagree on success");
             if (result != 0) continue;
             Require(utf16 == ucs2, "EUC-JP to UTF-16LE and to UCS-2 disagree on the character");
+            std::uint8_t encoded[4] = {};
+            Require(sceCesUcs2ToEucJp(ucs2, euc, encoded, 4, &produced) == 0, "a decoded character did not encode back");
             std::uint32_t again = 0;
-            Require(sceCesEucJpToUtf32le(euc, sequence, 2, &used, &again) == 0 && again == ucs2 && used == 2, "EUC-JP to UTF-32LE and to UCS-2 disagree on the character");
+            Require(sceCesEucJpToUtf32le(euc, encoded, produced, &used, &again) == 0 && again == ucs2 && used == produced, "a re-encoded character decodes differently");
             ++decoded;
         }
     }
@@ -117,6 +181,7 @@ int main() {
     cp1252 = sceCesRefersUcsProfileCp1252();
     Require(euc && sjis && cp1252, "a profile could not be made");
     CheckMultibyteToUnicode();
+    CheckUnicodeToMultibyte();
     CheckWholeEucJpTable();
     std::puts("CES single-character conversion tests passed");
     return 0;
