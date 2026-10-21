@@ -2,8 +2,13 @@
 #include <cstdint>
 #include <cstring>
 #include "prx/libc/include/general/VabiMacros.hpp"
+#include "Codec.hpp"
 
 namespace {
+
+using Ces::isScalar;
+using Ces::loadUnit;
+using Ces::storeUnit;
 
 constexpr int INVALID_SRC_BUFFER = static_cast<int>(0x805C0010);
 constexpr int SRC_BUFFER_END = static_cast<int>(0x805C0011);
@@ -12,10 +17,6 @@ constexpr int UNASSIGNED_CODE = static_cast<int>(0x805C0020);
 constexpr int INVALID_DST_BUFFER = static_cast<int>(0x805C0030);
 constexpr int DST_BUFFER_END = static_cast<int>(0x805C0031);
 constexpr bool NATIVE_BIG_ENDIAN = std::endian::native == std::endian::big;
-
-bool isScalar(uint32_t code) {
-    return code <= 0x10FFFF && (code < 0xD800 || code > 0xDFFF);
-}
 
 int decodeUtf8(const uint8_t* source, uint32_t available, uint32_t& code, uint32_t& length) {
     if (!source) return INVALID_SRC_BUFFER;
@@ -63,20 +64,6 @@ int encodeUtf8(uint32_t code, uint8_t* target, uint32_t capacity, uint32_t* targ
     std::memcpy(target, bytes, length);
     if (targetLength) *targetLength = length;
     return 0;
-}
-
-template<typename Unit, bool BigEndian>
-uint32_t loadUnit(const Unit* source) {
-    const auto* bytes = reinterpret_cast<const uint8_t*>(source);
-    uint32_t code = 0;
-    for (uint32_t i = 0; i < sizeof(Unit); ++i) code |= uint32_t(bytes[i]) << (8 * (BigEndian ? sizeof(Unit) - 1 - i : i));
-    return code;
-}
-
-template<typename Unit, bool BigEndian>
-void storeUnit(Unit* target, uint32_t code) {
-    auto* bytes = reinterpret_cast<uint8_t*>(target);
-    for (uint32_t i = 0; i < sizeof(Unit); ++i) bytes[i] = static_cast<uint8_t>(code >> (8 * (BigEndian ? sizeof(Unit) - 1 - i : i)));
 }
 
 template<bool BigEndian>

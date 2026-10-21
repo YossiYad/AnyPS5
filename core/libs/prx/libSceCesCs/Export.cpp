@@ -8,16 +8,9 @@
 #include "prx/libc/include/General.hpp"
 #include "JisX0208.hpp"
 #include "JisX0212.hpp"
+#include "Codec.hpp"
 
-namespace {
-
-constexpr int CES_ERROR_INVALID_PARAMETER = static_cast<int>(0x805C0001);
-constexpr int CES_ERROR_INVALID_SRC_BUFFER = static_cast<int>(0x805C0010);
-constexpr int CES_ERROR_SRC_BUFFER_END = static_cast<int>(0x805C0011);
-constexpr int CES_ERROR_INVALID_ENCODE = static_cast<int>(0x805C0014);
-constexpr int CES_ERROR_UNASSIGNED_CODE = static_cast<int>(0x805C0020);
-constexpr int CES_ERROR_INVALID_DST_BUFFER = static_cast<int>(0x805C0030);
-constexpr int CES_ERROR_DST_BUFFER_END = static_cast<int>(0x805C0031);
+namespace Ces {
 
 constexpr uint8_t PROFILES[3] = {0, 1, 2};
 constexpr const uint8_t* CP1252_PROFILE = &PROFILES[0];
@@ -331,6 +324,12 @@ uint32_t encodeUcs2(uint32_t code, uint16_t* ucs2) {
     ucs2[0] = static_cast<uint16_t>(code);
     return 1;
 }
+
+}
+
+namespace {
+
+using namespace Ces;
 
 template<typename Source, typename Decode>
 int toMbcs(const void* context, const Source* source, uint32_t sourceMax, uint32_t* sourceLen, uint8_t* mbcs, uint32_t mbcsMax, uint32_t* mbcsLen, Decode decode) {
