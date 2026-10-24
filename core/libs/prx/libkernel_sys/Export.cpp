@@ -340,6 +340,12 @@ std::uint16_t APS5_VABI umask_nid_postfix(std::uint16_t mask) {
     return File::ExchangeCreationMask_nid_no_patch(mask);
 }
 
+int APS5_VABI sceKernelGetOpenPsId(void* id);
+
+int APS5_VABI sceKernelGetOpenPsIdForSystem(void* id) {
+    return sceKernelGetOpenPsId(id);
+}
+
 int APS5_VABI sceKernelIsCEX(void) {
     return 1;
 }
