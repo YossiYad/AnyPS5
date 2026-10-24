@@ -81,11 +81,6 @@ int APS5_VABI futimesat_nid_postfix(void) {
     return 0;
 }
 
-int APS5_VABI get_authinfo_nid_postfix(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI get_module_info_list_nid_postfix(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
