@@ -12,16 +12,6 @@ int APS5_VABI sceCameraIsAttached(int32_t index) {
     return 0;
 }
 
-int APS5_VABI sceCameraGetConfig(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraSetConfig(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraGetDeviceInfo(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -102,11 +92,6 @@ int APS5_VABI sceCameraSetVideoSyncInternal(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraSetConfigInternal(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraSetAttributeInternal(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -123,11 +108,6 @@ int APS5_VABI sceCameraGetMmapConnectedCount(void) {
 }
 
 int APS5_VABI sceCamera2GetSaturation(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraGetDeviceConfig(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
@@ -333,11 +313,6 @@ int APS5_VABI sceCamera2GetConfig(void) {
 }
 
 int APS5_VABI sceCamera2GetWhiteBalance(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraGetDeviceConfigWithoutHandle(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
