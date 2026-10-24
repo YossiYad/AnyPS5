@@ -1021,24 +1021,20 @@ int APS5_VABI sceNpTusGetMultiSlotVariableVUser(int reqId, const NpOnlineId* tar
     return Complete(reqId, sceNpTusGetMultiSlotVariableVUserAsync(reqId, targetVirtualUserId, slotIds, variableArray, variableArraySize, arrayLen, option));
 }
 
-int APS5_VABI sceNpTusSetData() {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
+int APS5_VABI sceNpTusSetData(int reqId, const void* targetNpId, std::int32_t slotId, std::uint64_t totalSize, std::uint64_t sendSize, const void* data, const void* info, std::uint64_t infoStructSize, const void* isLastChangedAuthor, const void* isLastChangedDate, void* option) {
+    return Complete(reqId, sceNpTusSetDataAsync(reqId, targetNpId, slotId, totalSize, sendSize, data, info, infoStructSize, isLastChangedAuthor, isLastChangedDate, option));
 }
 
-int APS5_VABI sceNpTusSetDataVUser() {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
+int APS5_VABI sceNpTusSetDataVUser(int reqId, const NpOnlineId* targetVirtualUserId, std::int32_t slotId, std::uint64_t totalSize, std::uint64_t sendSize, const void* data, const void* info, std::uint64_t infoStructSize, const void* isLastChangedAuthor, const void* isLastChangedDate, void* option) {
+    return Complete(reqId, sceNpTusSetDataVUserAsync(reqId, targetVirtualUserId, slotId, totalSize, sendSize, data, info, infoStructSize, isLastChangedAuthor, isLastChangedDate, option));
 }
 
-int APS5_VABI sceNpTusSetMultiSlotVariable() {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
+int APS5_VABI sceNpTusSetMultiSlotVariable(int reqId, const void* targetNpId, const std::int32_t* slotIds, const std::int64_t* variableArray, int arrayLen, void* option) {
+    return Complete(reqId, sceNpTusSetMultiSlotVariableAsync(reqId, targetNpId, slotIds, variableArray, arrayLen, option));
 }
 
-int APS5_VABI sceNpTusSetMultiSlotVariableVUser() {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
+int APS5_VABI sceNpTusSetMultiSlotVariableVUser(int reqId, const NpOnlineId* targetVirtualUserId, const std::int32_t* slotIds, const std::int64_t* variableArray, int arrayLen, void* option) {
+    return Complete(reqId, sceNpTusSetMultiSlotVariableVUserAsync(reqId, targetVirtualUserId, slotIds, variableArray, arrayLen, option));
 }
 
 }
