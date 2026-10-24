@@ -3,22 +3,12 @@
 #include "SceTypes.hpp"
 #include "prx/libc/include/General.hpp"
 
-static constexpr int SCE_CAMERA_ERROR_PARAM = static_cast<int>(0x802E0000);
+#include "prx/libSceCamera/include/Camera.hpp"
 
 extern "C" {
 
 int APS5_VABI sceCameraIsAttached(int32_t index) {
     if (index != 0) return SCE_CAMERA_ERROR_PARAM;
-    return 0;
-}
-
-int APS5_VABI sceCameraOpen(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraClose(void) {
-    NotImplemented_nid_no_patch(__func__);
     return 0;
 }
 
@@ -583,11 +573,6 @@ int APS5_VABI sceCameraSetAutoWhiteBalance(void) {
 }
 
 int APS5_VABI sceCameraGetHue(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraCloseByHandle(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
