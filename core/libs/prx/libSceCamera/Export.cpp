@@ -12,16 +12,6 @@ int APS5_VABI sceCameraIsAttached(int32_t index) {
     return 0;
 }
 
-int APS5_VABI sceCameraStart(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraStop(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraGetConfig(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -48,11 +38,6 @@ int APS5_VABI sceCameraGetFrameData(void) {
 }
 
 int APS5_VABI sceCameraIsValidFrameData(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraStopByHandle(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
@@ -333,11 +318,6 @@ int APS5_VABI sceCameraGetSharpness(void) {
 }
 
 int APS5_VABI sceCamera2GetExposureGain(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraStartByHandle(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
