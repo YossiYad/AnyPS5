@@ -48,9 +48,8 @@ int APS5_VABI sceNpPartyGetId(void* id) {
     return notInParty(id);
 }
 
-int APS5_VABI sceNpPartyGetMemberInfo(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
+int APS5_VABI sceNpPartyGetMemberInfo(std::uint16_t, void* memberInfo) {
+    return notInParty(memberInfo);
 }
 
 int APS5_VABI sceNpPartyGetMemberInfoA(std::uint16_t, void* memberInfo) {
@@ -65,9 +64,8 @@ int APS5_VABI sceNpPartyGetMemberVoiceInfo(std::uint16_t, std::uint16_t, std::ui
     return notInParty(memberVoiceState);
 }
 
-int APS5_VABI sceNpPartyGetMembers(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
+int APS5_VABI sceNpPartyGetMembers(void* memberList) {
+    return notInParty(memberList);
 }
 
 int APS5_VABI sceNpPartyGetMembersA(void* memberList) {
