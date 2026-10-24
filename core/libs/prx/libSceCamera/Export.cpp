@@ -22,11 +22,6 @@ int APS5_VABI sceCameraSetConfig(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraSetAttribute(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraGetDeviceInfo(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -68,11 +63,6 @@ int APS5_VABI sceCamera2SetSharpness(void) {
 }
 
 int APS5_VABI sceCameraSetTrackerMode(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraSetContrast(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
@@ -172,11 +162,6 @@ int APS5_VABI sceCamera2GetAttribute(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraSetLensCorrection(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraSetCalibData(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -192,17 +177,7 @@ int APS5_VABI sceCamera2SetConfig(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraSetSharpness(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCamera2Initialize(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraSetHue(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
@@ -262,11 +237,6 @@ int APS5_VABI sceCamera2GetFrameData(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraSetSaturation(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCamera2GetExposureGain(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -278,11 +248,6 @@ int APS5_VABI sceCamera2Open(void) {
 }
 
 int APS5_VABI sceCamera2Start(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraSetLensCorrectionInternal(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
@@ -337,22 +302,12 @@ int APS5_VABI sceCameraSetAppModuleFocus(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraSetDefectivePixelCancellation(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraGetDeviceID(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
 
 int APS5_VABI sceCameraSetForceActivate(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraSetWhiteBalance(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
@@ -368,11 +323,6 @@ int APS5_VABI sceCamera2IsValidFrameData(void) {
 }
 
 int APS5_VABI sceCameraSetProcessFocus(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraSetGamma(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
@@ -432,11 +382,6 @@ int APS5_VABI sceCameraWaitForLukeReady(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraSetDefectivePixelCancellationInternal(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCamera2GetSharpness(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -462,27 +407,12 @@ int APS5_VABI sceCameraIsConfigChangeDone(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraSetExposureGain(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraSetVideoSync(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
 
 int APS5_VABI sceCameraAudioReset(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraSetAutoExposureGain(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraSetAutoWhiteBalance(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }

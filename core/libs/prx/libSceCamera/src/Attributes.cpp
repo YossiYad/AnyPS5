@@ -7,6 +7,7 @@ namespace {
 
 constexpr std::uint32_t CHANNEL_0 = 1;
 constexpr std::uint32_t CHANNEL_BOTH = 3;
+constexpr std::uint32_t AECAGC_TARGET_2_0 = 0x20;
 
 struct CameraFramePosition {
     std::uint32_t x;
@@ -64,10 +65,23 @@ constexpr CameraWhiteBalance DEFAULT_WHITE_BALANCE{0, 768, 768, 512};
 
 bool Readable(std::uint32_t channel) { return channel >= CHANNEL_0 && channel < CHANNEL_BOTH; }
 
+bool Writable(std::uint32_t channel) { return channel >= CHANNEL_0 && channel <= CHANNEL_BOTH; }
+
 int CheckGet(std::int32_t handle, std::uint32_t channel, const void* out, const void* option) {
     if (handle < 1 || !Readable(channel) || !out || option) return SCE_CAMERA_ERROR_PARAM;
     if (!Camera::IsOpen()) return SCE_CAMERA_ERROR_NOT_OPEN;
     return 0;
+}
+
+int RefuseSet(std::int32_t handle, std::uint32_t channel, bool valid) {
+    if (handle < 1 || !Writable(channel) || !valid) return SCE_CAMERA_ERROR_PARAM;
+    if (!Camera::IsOpen()) return SCE_CAMERA_ERROR_NOT_OPEN;
+    return SCE_CAMERA_ERROR_NOT_CONNECTED;
+}
+
+bool ValidTarget(const CameraAutoExposureGainTarget* option) {
+    if (!option) return true;
+    return option->sizeThis == sizeof(CameraAutoExposureGainTarget) && option->target % 2 == 0 && option->target <= AECAGC_TARGET_2_0;
 }
 
 template <typename TValue>
@@ -148,6 +162,63 @@ int APS5_VABI sceCameraGetGamma(std::int32_t handle, std::uint32_t channel, Came
     CameraGamma value{};
     value.value = DEFAULT_GAMMA;
     return Report(handle, channel, gamma, option, value);
+}
+
+int APS5_VABI sceCameraSetAttribute(std::int32_t handle, const CameraAttribute* attribute) {
+    if (!attribute || attribute->sizeThis != sizeof(CameraAttribute)) return SCE_CAMERA_ERROR_PARAM;
+    return RefuseSet(handle, attribute->channel, true);
+}
+
+int APS5_VABI sceCameraSetAutoExposureGain(std::int32_t handle, std::uint32_t channel, std::uint32_t, const CameraAutoExposureGainTarget* option) {
+    return RefuseSet(handle, channel, ValidTarget(option));
+}
+
+int APS5_VABI sceCameraSetAutoWhiteBalance(std::int32_t handle, std::uint32_t channel, std::uint32_t, const void* option) {
+    return RefuseSet(handle, channel, !option);
+}
+
+int APS5_VABI sceCameraSetDefectivePixelCancellation(std::int32_t handle, std::uint32_t channel, std::uint32_t enable, const void* option) {
+    return RefuseSet(handle, channel, enable <= 1 && !option);
+}
+
+int APS5_VABI sceCameraSetDefectivePixelCancellationInternal(std::int32_t handle, std::uint32_t channel, std::uint32_t enable, const void* option) {
+    return RefuseSet(handle, channel, enable <= 2 && !option);
+}
+
+int APS5_VABI sceCameraSetLensCorrection(std::int32_t handle, std::uint32_t channel, std::uint32_t enable, const void* option) {
+    return RefuseSet(handle, channel, enable <= 1 && !option);
+}
+
+int APS5_VABI sceCameraSetLensCorrectionInternal(std::int32_t handle, std::uint32_t channel, std::uint32_t enable, const void* option) {
+    return RefuseSet(handle, channel, enable <= 2 && !option);
+}
+
+int APS5_VABI sceCameraSetContrast(std::int32_t handle, std::uint32_t channel, std::uint32_t, const void* option) {
+    return RefuseSet(handle, channel, !option);
+}
+
+int APS5_VABI sceCameraSetSaturation(std::int32_t handle, std::uint32_t channel, std::uint32_t, const void* option) {
+    return RefuseSet(handle, channel, !option);
+}
+
+int APS5_VABI sceCameraSetSharpness(std::int32_t handle, std::uint32_t channel, std::uint32_t sharpness, const void* option) {
+    return RefuseSet(handle, channel, sharpness <= 10 && !option);
+}
+
+int APS5_VABI sceCameraSetHue(std::int32_t handle, std::uint32_t channel, std::int32_t, const void* option) {
+    return RefuseSet(handle, channel, !option);
+}
+
+int APS5_VABI sceCameraSetExposureGain(std::int32_t handle, std::uint32_t channel, const CameraExposureGain* exposureGain, const void* option) {
+    return RefuseSet(handle, channel, exposureGain && !option);
+}
+
+int APS5_VABI sceCameraSetWhiteBalance(std::int32_t handle, std::uint32_t channel, const CameraWhiteBalance* whiteBalance, const void* option) {
+    return RefuseSet(handle, channel, whiteBalance && !option);
+}
+
+int APS5_VABI sceCameraSetGamma(std::int32_t handle, std::uint32_t channel, const CameraGamma* gamma, const void* option) {
+    return RefuseSet(handle, channel, gamma && !option);
 }
 
 }
