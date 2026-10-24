@@ -37,11 +37,6 @@ int APS5_VABI sceCameraGetDeviceIDWithoutOpen(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraGetAttribute(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraInitializeRegistryCalibData(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -162,11 +157,6 @@ int APS5_VABI sceCameraGetCalibDataFromDeviceForEve(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraGetWhiteBalance(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraGetVrCaptureInfo(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -202,11 +192,6 @@ int APS5_VABI sceCamera2SetConfig(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraGetExposureGain(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraSetSharpness(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -233,11 +218,6 @@ int APS5_VABI sceCamera2SetAttribute(void) {
 }
 
 int APS5_VABI sceCameraGetCalibrationData(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraGetSaturation(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
@@ -272,16 +252,6 @@ int APS5_VABI sceCameraGetProductInfo(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraGetGamma(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraGetLensCorrection(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraChangeAppModuleState(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -292,17 +262,7 @@ int APS5_VABI sceCamera2GetFrameData(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraGetContrast(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraSetSaturation(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraGetSharpness(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
@@ -442,11 +402,6 @@ int APS5_VABI sceCameraSetUacModeInternal(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraGetAutoExposureGain(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraGetRegister(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
@@ -458,16 +413,6 @@ int APS5_VABI sceCamera2SetGamma(void) {
 }
 
 int APS5_VABI sceCameraRemoveAppModuleFocus(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraGetAutoWhiteBalance(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraGetDefectivePixelCancellation(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
@@ -538,11 +483,6 @@ int APS5_VABI sceCameraSetAutoExposureGain(void) {
 }
 
 int APS5_VABI sceCameraSetAutoWhiteBalance(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraGetHue(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;
 }
