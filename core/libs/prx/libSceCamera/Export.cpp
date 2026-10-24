@@ -32,16 +32,6 @@ int APS5_VABI sceCameraGetDeviceInfo(void) {
     return 0;
 }
 
-int APS5_VABI sceCameraGetFrameData(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
-int APS5_VABI sceCameraIsValidFrameData(void) {
-    NotImplemented_nid_no_patch(__func__);
-    return 0;
-}
-
 int APS5_VABI sceCameraGetDeviceIDWithoutOpen(void) {
     NotImplemented_nid_no_patch(__func__);
     return 0;

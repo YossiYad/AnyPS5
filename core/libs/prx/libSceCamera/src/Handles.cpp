@@ -6,11 +6,21 @@
 namespace {
 
 constexpr std::int32_t SCE_USER_SERVICE_USER_ID_SYSTEM = 0xFF;
+constexpr std::uint32_t MAX_FRAME_DATA_SIZE = 584;
 
 struct CameraStartParameter {
     std::uint32_t sizeThis;
     std::uint32_t formatLevel[2];
     void* startOption;
+};
+
+struct CameraFrameData {
+    std::uint32_t sizeThis;
+    std::uint32_t readMode;
+    std::uint32_t framePosition[2][4][4];
+    void* framePointerList[2][4];
+    std::uint32_t frameSize[2][4];
+    std::uint32_t status[2];
 };
 
 std::atomic<std::int32_t> openHandles{0};
@@ -66,6 +76,20 @@ int APS5_VABI sceCameraStop(std::int32_t handle) {
 
 int APS5_VABI sceCameraStopByHandle(std::int32_t handle) {
     return sceCameraStop(handle);
+}
+
+int APS5_VABI sceCameraGetFrameData(std::int32_t handle, CameraFrameData* frameData) {
+    if (!frameData) return SCE_CAMERA_ERROR_PARAM;
+    frameData->status[0] = UINT32_MAX;
+    frameData->status[1] = UINT32_MAX;
+    if (handle < 1 || frameData->sizeThis > MAX_FRAME_DATA_SIZE) return SCE_CAMERA_ERROR_PARAM;
+    return SCE_CAMERA_ERROR_NOT_OPEN;
+}
+
+int APS5_VABI sceCameraIsValidFrameData(std::int32_t handle, const CameraFrameData* frameData) {
+    if (handle < 1 || !frameData || frameData->sizeThis > MAX_FRAME_DATA_SIZE) return SCE_CAMERA_ERROR_PARAM;
+    if (!Camera::IsOpen()) return SCE_CAMERA_ERROR_NOT_OPEN;
+    return frameData->status[0] == 1 && frameData->status[1] == 1;
 }
 
 }
