@@ -308,7 +308,8 @@ def digest_intervals(lines):
                      "top_phase": {"name": largest[0], "ms_per_frame": largest[1]} if largest else None,
                      "trace_dropped": line.get("trace_dropped", False)})
     first = lines[0] if lines else {}
-    keys = ("commit", "dirty", "env", "gpu", "driver", "os", "resolution")
+    keys = ("commit", "dirty", "env", "gpu", "driver", "os", "resolution",
+            "cpu", "cpu_threads", "memory_mib", "title_id", "title", "content_version")
     changed = [index for index in range(1, len(lines)) if any(lines[index].get(key) != lines[index - 1].get(key) for key in keys)]
     return {"intervals": rows, "identity": {key: first.get(key) for key in keys}, "identity_changed_at": changed}
 
@@ -322,7 +323,7 @@ def markdown_intervals(result):
              f"{identity['gpu']}, {identity['driver']}, {identity['os']}, {identity['resolution']}, commit {identity['commit']}"
              f"{' (dirty)' if identity.get('dirty') else ''}"]
     if result["identity_changed_at"]:
-        lines.append("commit, environment, GPU, driver or OS changed at interval " + ", ".join(str(index + 1) for index in result["identity_changed_at"]))
+        lines.append("build, environment, host, resolution or title metadata changed at interval " + ", ".join(str(index + 1) for index in result["identity_changed_at"]))
     lines += ["", "| # | seconds | presents | p50 | p90 | p99 | max | GPU busy | busiest worker | largest phase |", "|---|---|---|---|---|---|---|---|---|---|"]
     for index, row in enumerate(rows, 1):
         frame = row["frame_ms"]
@@ -344,6 +345,9 @@ def nonnegative_integer(value):
 
 
 def main(arguments=None):
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="backslashreplace")
     parser = argparse.ArgumentParser(description=DESCRIPTION)
     parser.add_argument("trace", help="aps5-trace-*.json.gz (or .json), or a .jsonl summary file with APS5_TRACE_SUMMARY_EVERY lines")
     parser.add_argument("--summary", help="file with the summary line (default: aps5-summary.jsonl next to the trace)")
@@ -378,9 +382,6 @@ def main(arguments=None):
 
 
 if __name__ == "__main__":
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8", errors="replace")
     try:
         sys.exit(main())
     except (EOFError, OSError, ValueError, zlib.error) as error:

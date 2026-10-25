@@ -23,12 +23,14 @@
 #include "prx/libSceAgcDriver/Execution/include/SubgroupClock.hpp"
 #include "prx/libSceAgcDriver/Execution/include/ShaderDeviceProfile.hpp"
 #include "prx/libSceAgcDriver/Execution/include/PresentMode.hpp"
+#include "prx/libSceAgcDriver/Execution/include/SwapchainImages.hpp"
 #include "prx/libSceAgcDriver/Execution/include/PerformanceOverlay.hpp"
 #include "prx/libSceAgcDriver/Execution/include/PresentationPass.hpp"
 #include "prx/libSceAgcDriver/Execution/include/PresentationScaler.hpp"
 #include "prx/libSceAgcDriver/Execution/include/Screenshot.hpp"
 #include "prx/libkernel/AppMetadata/include/AppMetadata.hpp"
 #include "prx/libSceAgcDriver/Graphics/include/DepthSurface.hpp"
+#include "prx/libSceAgcDriver/Graphics/include/Draw.hpp"
 #include "prx/libSceAgcDriver/Graphics/include/PlaceholderImages.hpp"
 #include "prx/libSceAgcDriver/Graphics/include/DccMetadata.hpp"
 #include "prx/libSceAgcDriver/Execution/include/DisplayFormat.hpp"
@@ -82,7 +84,7 @@
 
 namespace AgcDriver {
 
-DeviceQueuePlan PlanDeviceQueues(std::span<const VkQueueFamilyProperties> families, std::uint32_t family, bool settles, bool sparseBinding) {
+DeviceQueuePlan PlanDeviceQueues(std::span<const VkQueueFamilyProperties> families, std::uint32_t family, bool settles, bool sparseBinding, bool presents) {
     DeviceQueuePlan plan;
     const auto count = static_cast<std::uint32_t>(families.size());
     if (settles) {
@@ -99,6 +101,13 @@ DeviceQueuePlan PlanDeviceQueues(std::span<const VkQueueFamilyProperties> famili
             for (std::uint32_t i = 0; i < count && !plan.settle; ++i) {
                 if (copies(i)) plan.settle = true, plan.settleFamily = i;
             }
+        }
+    }
+    if (presents && family < count) {
+        if (const auto index = SelectPresentQueue(families[family].queueCount, plan.mainCount)) {
+            plan.present = true;
+            plan.presentIndex = *index;
+            plan.mainCount = *index + 1;
         }
     }
     if (!sparseBinding) return plan;
@@ -167,6 +176,12 @@ void CreateComputePipeline(VkDevice device, PFN_vkCreateComputePipelines create,
     check(create(device, cache, 1, &info, nullptr, pipeline), "vkCreateComputePipelines");
     PerformanceCounters::CountPipeline();
 }
+
+#ifdef _WIN32
+const wchar_t* ComputePipelineDumpDirectory() { return _wgetenv(L"APS5_DUMP_COMPUTE_PIPELINES"); }
+#else
+const char* ComputePipelineDumpDirectory() { return std::getenv("APS5_DUMP_COMPUTE_PIPELINES"); }
+#endif
 
 bool CaptureComputePipeline(std::size_t words) {
     const char* minimum = std::getenv("APS5_DUMP_COMPUTE_MIN_WORDS");
@@ -341,6 +356,8 @@ struct VulkanDevice::State {
     VkDeviceSize uploadSize = 0;
     VkPhysicalDeviceProperties properties{};
     std::string driverInfo;
+    VkDriverId driverId = VK_DRIVER_ID_MAX_ENUM;
+    std::uint32_t pixelFunctionStorageDwords = 4096u;
     bool individuallyFreeDescriptorSets = false;
     PFN_vkGetCalibratedTimestampsKHR calibratedTimestamps = nullptr;
     PFN_vkCmdSetCheckpointNV checkpointMarker = nullptr;
@@ -379,6 +396,7 @@ struct VulkanDevice::State {
     bool earlyFragmentSampleMaskTestBeforeSampleCounting = false;
     bool robustBufferAccess2 = false;
     bool subgroupControlBarriers = true;
+    bool workgroupScopeFences = true;
     // VK_EXT_descriptor_indexing with non-uniform image array indexing (bindless image tables in
     // graphics stages, and compute workgroups wider than a wave).
     bool descriptorIndexing = false;
@@ -412,6 +430,7 @@ struct VulkanDevice::State {
     bool depthBounds = false;
     bool depthBiasClamp = false;
     bool dualSrcBlend = false;
+    bool logicOp = false;
     bool occlusionQueryPrecise = false;
     VkDeviceSize hostImportAlignment = 0;
     bool drawInputsInPlace = true;
@@ -428,6 +447,8 @@ struct VulkanDevice::State {
     std::uint32_t settleFamily = 0;
     VkCommandPool settlePool = VK_NULL_HANDLE;
     std::mutex settleQueueMutex;
+    VkQueue presentQueue = VK_NULL_HANDLE;
+    std::mutex presentQueueMutex;
     bool memoryBudget = false;
     bool depthRangeUnrestricted = false;
     bool samplerAnisotropy = false;
@@ -798,7 +819,7 @@ struct VulkanDevice::State {
             for (std::uint32_t x = 0; x < width; ++x) std::memcpy(pixels.data() + (static_cast<std::size_t>(y) * width + x) * 4, full.data() + (static_cast<std::size_t>(y) * scale * slot.dumpWidth + static_cast<std::size_t>(x) * scale) * 4, 4);
         }
         static const auto start = std::chrono::steady_clock::now();
-        std::fprintf(stderr, "[gpu] frame_%03d.bmp: %ux%u display read back on the GPU at %.1f s\n", index, slot.dumpWidth, slot.dumpHeight, std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+        AgcDriver::ProfilePrint_nid_no_patch("[gpu] frame_%03d.bmp: %ux%u display read back on the GPU at %.1f s\n", index, slot.dumpWidth, slot.dumpHeight, std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
         dumpWriter.Enqueue(index, width, height, 1, false, std::move(pixels));
     }
 
@@ -1264,9 +1285,22 @@ VulkanDevice::VulkanDevice(const PresentationWindow* window, bool compileOnly) :
         state->InstanceFunction<PFN_vkGetPhysicalDeviceProperties2>("vkGetPhysicalDeviceProperties2")(selected, &driverProperties);
         driverId = driver.driverID;
         state->driverInfo = std::string(driver.driverName) + " " + driver.driverInfo;
+        state->driverId = driver.driverID;
         state->individuallyFreeDescriptorSets = driver.driverID == VK_DRIVER_ID_MESA_LLVMPIPE;
         state->fusedExactArithmetic = driver.driverID == VK_DRIVER_ID_MOLTENVK;
         state->subgroupControlBarriers = SubgroupControlBarrierUsable(driver.driverID);
+        state->workgroupScopeFences = WorkgroupScopeFenceUsable(driver.driverID);
+    }
+    if (driverId == VK_DRIVER_ID_NVIDIA_PROPRIETARY && hasExtension(VK_NV_SHADER_SM_BUILTINS_EXTENSION_NAME)) {
+        VkPhysicalDeviceShaderSMBuiltinsPropertiesNV smBuiltins{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_SM_BUILTINS_PROPERTIES_NV};
+        VkPhysicalDeviceProperties2 smProperties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, &smBuiltins};
+        state->InstanceFunction<PFN_vkGetPhysicalDeviceProperties2>("vkGetPhysicalDeviceProperties2")(selected, &smProperties);
+        const auto subgroup = state->subgroup.subgroupSize;
+        if (smBuiltins.shaderSMCount != 0u && smBuiltins.shaderWarpsPerSM != 0u && subgroup != 0u) {
+            const auto invocations = static_cast<std::uint64_t>(smBuiltins.shaderSMCount) * smBuiltins.shaderWarpsPerSM * subgroup;
+            const auto budgetDwords = (4ull << 30) / (invocations * 4ull);
+            if (budgetDwords < state->pixelFunctionStorageDwords) state->pixelFunctionStorageDwords = static_cast<std::uint32_t>(budgetDwords);
+        }
     }
     auto byteFeatures = QueryBdaByteFeatures(selected, state->InstanceFunction<PFN_vkGetPhysicalDeviceFeatures2>("vkGetPhysicalDeviceFeatures2"), availableExtensions);
     auto bdaFeatures = QueryBdaFeatures(selected, state->InstanceFunction<PFN_vkGetPhysicalDeviceFeatures2>("vkGetPhysicalDeviceFeatures2"), availableExtensions);
@@ -1675,7 +1709,7 @@ VulkanDevice::VulkanDevice(const PresentationWindow* window, bool compileOnly) :
     queueInfo.queueFamilyIndex = family;
     queueInfo.queueCount = 1;
     queueInfo.pQueuePriorities = &priority;
-    const float priorities[2]{1.0f, 1.0f};
+    const float priorities[3]{1.0f, 1.0f, 1.0f};
 #ifdef _WIN32
     const bool settles = true;
 #else
@@ -1722,13 +1756,13 @@ VulkanDevice::VulkanDevice(const PresentationWindow* window, bool compileOnly) :
     // Guest shaders routinely read past descriptor ranges; robust access turns that into zeros
     // instead of a GPU fault that loses the device.
     enabled.robustBufferAccess = available.robustBufferAccess;
-    const auto plan = PlanDeviceQueues(queues, family, settles, available.sparseBinding == VK_TRUE);
+    const auto plan = PlanDeviceQueues(queues, family, settles, available.sparseBinding == VK_TRUE, window != nullptr);
     const bool settleQueue = plan.settle;
     const auto settleFamily = plan.settleFamily;
     const auto settleIndex = plan.settleIndex;
     VkDeviceQueueCreateInfo queueInfos[3]{queueInfo, {VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO}, {VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO}};
     queueInfos[0].queueCount = plan.mainCount;
-    queueInfos[0].pQueuePriorities = plan.mainCount == 2 ? priorities : &priority;
+    queueInfos[0].pQueuePriorities = plan.mainCount > 1 ? priorities : &priority;
     deviceInfo.queueCreateInfoCount = 1;
     const auto addQueue = [&](std::uint32_t queueFamily, std::uint32_t index) {
         for (std::uint32_t info = 1; info < deviceInfo.queueCreateInfoCount; ++info) {
@@ -1769,6 +1803,8 @@ VulkanDevice::VulkanDevice(const PresentationWindow* window, bool compileOnly) :
     enabled.depthBiasClamp = available.depthBiasClamp;
     state->depthBiasClamp = enabled.depthBiasClamp == VK_TRUE;
     enabled.dualSrcBlend = available.dualSrcBlend;
+    enabled.logicOp = available.logicOp;
+    state->logicOp = enabled.logicOp == VK_TRUE;
     state->dualSrcBlend = enabled.dualSrcBlend == VK_TRUE;
     enabled.occlusionQueryPrecise = available.occlusionQueryPrecise;
     state->occlusionQueryPrecise = enabled.occlusionQueryPrecise == VK_TRUE;
@@ -2031,6 +2067,29 @@ VulkanDevice::VulkanDevice(const PresentationWindow* window, bool compileOnly) :
         deviceInfo.enabledExtensionCount = static_cast<std::uint32_t>(deviceExtensions.size());
         deviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
     }
+    const bool diagnosticsRequested = std::getenv("APS5_NV_DIAGNOSTICS") != nullptr;
+    VkPhysicalDeviceDiagnosticsConfigFeaturesNV diagnosticsFeatures{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DIAGNOSTICS_CONFIG_FEATURES_NV};
+    if (diagnosticsRequested && hasExtension(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME)) {
+        VkPhysicalDeviceFeatures2 features{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &diagnosticsFeatures};
+        state->InstanceFunction<PFN_vkGetPhysicalDeviceFeatures2>("vkGetPhysicalDeviceFeatures2")(selected, &features);
+    }
+    const auto diagnostics = ChooseDeviceDiagnostics(diagnosticsRequested, diagnosticsFeatures.diagnosticsConfig == VK_TRUE, hasExtension(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME));
+    VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfig{VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV};
+    if (diagnostics.config) {
+        diagnosticsFeatures = {VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DIAGNOSTICS_CONFIG_FEATURES_NV};
+        diagnosticsFeatures.diagnosticsConfig = VK_TRUE;
+        diagnosticsConfig.flags = diagnostics.flags;
+        deviceExtensions.push_back(VK_NV_DEVICE_DIAGNOSTICS_CONFIG_EXTENSION_NAME);
+        if (diagnostics.checkpoints && !checkpoints) deviceExtensions.push_back(VK_NV_DEVICE_DIAGNOSTIC_CHECKPOINTS_EXTENSION_NAME);
+        deviceInfo.enabledExtensionCount = static_cast<std::uint32_t>(deviceExtensions.size());
+        deviceInfo.ppEnabledExtensionNames = deviceExtensions.data();
+        diagnosticsConfig.pNext = byteFeatures.pNext;
+        diagnosticsFeatures.pNext = &diagnosticsConfig;
+        byteFeatures.pNext = &diagnosticsFeatures;
+        std::fprintf(stderr, "[gpu] APS5_NV_DIAGNOSTICS: VK_NV_device_diagnostics_config enabled (shader debug info, resource tracking, automatic checkpoints, shader error reporting)\n");
+    } else if (diagnosticsRequested) {
+        std::fprintf(stderr, "[gpu] APS5_NV_DIAGNOSTICS: the device does not support VK_NV_device_diagnostics_config\n");
+    }
     bdaFeatures.pNext = &byteFeatures;
     VkPhysicalDeviceRobustness2FeaturesEXT robustness2{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT};
     if (hasExtension(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME)) {
@@ -2075,6 +2134,10 @@ VulkanDevice::VulkanDevice(const PresentationWindow* window, bool compileOnly) :
     }
     state->DeviceFunction<PFN_vkGetDeviceQueue>("vkGetDeviceQueue")(state->device, family, 0, &state->queue);
     state->queueFamily = family;
+    if (plan.present) {
+        state->DeviceFunction<PFN_vkGetDeviceQueue>("vkGetDeviceQueue")(state->device, family, plan.presentIndex, &state->presentQueue);
+        APS5_LOG_OUT("Presentation queue family=%u index=%u", family, plan.presentIndex);
+    }
     if (settleQueue) {
         state->settleFamily = settleFamily;
         state->DeviceFunction<PFN_vkGetDeviceQueue>("vkGetDeviceQueue")(state->device, settleFamily, settleIndex, &state->settleQueue);
@@ -2165,7 +2228,7 @@ VulkanDevice::VulkanDevice(const PresentationWindow* window, bool compileOnly) :
         require((surface.supportedUsageFlags & VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT) != 0, "surface does not support color attachment images");
         VkSwapchainCreateInfoKHR swapchain{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
         swapchain.surface = state->surface;
-        swapchain.minImageCount = surface.minImageCount;
+        swapchain.minImageCount = AgcDriver::SwapchainImageCount(surface);
         swapchain.imageFormat = state->surfaceFormat;
         swapchain.imageColorSpace = state->surfaceColorSpace;
         swapchain.imageExtent = state->extent;
@@ -2304,7 +2367,10 @@ void VulkanDevice::WaitIdle() {
         if (!state->recorder->Idle()) Graphics::Recorder::CountSync(0, __builtin_return_address(0));
         state->recorder->Sync();
     }
+    std::unique_lock presentQueueLock(state->presentQueueMutex, std::defer_lock);
+    if (state->presentQueue != VK_NULL_HANDLE) presentQueueLock.lock();
     check(state->DeviceFunction<PFN_vkDeviceWaitIdle>("vkDeviceWaitIdle")(state->device), "vkDeviceWaitIdle");
+    Graphics::CheckPixelFunctionLds(graphicsContext());
     APS5_LOG_CHARS_OUT_DEBUG("VulkanDevice::WaitIdle complete");
 }
 
@@ -2349,6 +2415,14 @@ std::uint64_t VulkanDevice::SubmitAndEpoch() {
 
 void VulkanDevice::WaitRecorded(std::uint64_t serial) {
     if (state->recorder) state->recorder->WaitSerial(serial);
+}
+
+std::uint64_t VulkanDevice::SubmittedEpoch() const {
+    return state->recorder ? state->recorder->NewestSubmitted() : 0;
+}
+
+bool VulkanDevice::WaitRecordedFor(std::uint64_t serial, std::uint64_t timeoutNanos) {
+    return state->recorder && state->recorder->WaitSerialFor(serial, timeoutNanos);
 }
 
 void VulkanDevice::ReapRecorded(std::uint64_t serial) {
@@ -3007,7 +3081,7 @@ void VulkanDevice::recreateSwapchain(std::uint32_t width, std::uint32_t height, 
     require((surface.supportedUsageFlags & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0 && (surface.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) != 0 && (surface.supportedTransforms & VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) != 0, "resized surface capabilities are unsupported");
     VkSwapchainCreateInfoKHR create{VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
     create.surface = state->surface;
-    create.minImageCount = surface.minImageCount;
+    create.minImageCount = AgcDriver::SwapchainImageCount(surface);
     create.imageFormat = state->surfaceFormat;
     create.imageColorSpace = state->surfaceColorSpace;
     create.imageExtent = {width, height};
@@ -3700,6 +3774,7 @@ double VulkanDevice::RetirePresents(std::size_t keepInFlight) {
     const auto status = state->DeviceFunction<PFN_vkGetFenceStatus>("vkGetFenceStatus");
     auto inFlight = static_cast<std::size_t>(std::count_if(slots.begin(), slots.end(), [](const auto& slot) { return slot.inFlight; }));
     double waitedMs = 0;
+    bool retired = false;
     // Oldest first from the cursor; the fences of one queue signal in submission order, so the
     // first unsignaled one ends the scan, and the ones beyond the bound are the oldest.
     for (std::size_t i = 0; i < slots.size() && inFlight != 0; ++i) {
@@ -3718,9 +3793,11 @@ double VulkanDevice::RetirePresents(std::size_t keepInFlight) {
         }
         const bool dump = slot.dumpRecorded;
         state->RetireSlot(slot);
+        retired = true;
         if (dump) timing.Mark("dump");
         --inFlight;
     }
+    if (retired) Graphics::CheckPixelFunctionLds(graphicsContext());
     return waitedMs;
 }
 
@@ -3740,11 +3817,17 @@ void VulkanDevice::QueuePresent() {
     present.swapchainCount = 1;
     present.pSwapchains = &state->swapchain;
     present.pImageIndices = &index;
-    const auto presented = state->DeviceFunction<PFN_vkQueuePresentKHR>("vkQueuePresentKHR")(state->queue, &present);
+    std::unique_lock presentQueueLock(state->presentQueueMutex, std::defer_lock);
+    if (state->presentQueue != VK_NULL_HANDLE) presentQueueLock.lock();
+    const auto presented = state->DeviceFunction<PFN_vkQueuePresentKHR>("vkQueuePresentKHR")(state->presentQueue != VK_NULL_HANDLE ? state->presentQueue : state->queue, &present);
     if (presented == VK_ERROR_OUT_OF_DATE_KHR || presented == VK_SUBOPTIMAL_KHR) state->extent = {0, 0};
     else check(presented, "vkQueuePresentKHR");
     timing.Mark("queue_present");
     APS5_LOG_OUT_DEBUG("vkQueuePresentKHR queued imageIndex=%u", index);
+}
+
+bool VulkanDevice::PresentsOnOwnQueue() const {
+    return state->presentQueue != VK_NULL_HANDLE;
 }
 
 ShaderRecompiler::SpirvTarget VulkanDevice::ComputeTarget(std::uint32_t waveSize) const {
@@ -3827,6 +3910,9 @@ ShaderRecompiler::SpirvTarget VulkanDevice::buildTarget() const {
     target.registrationModules = state->graphicsPipelineLibrary;
     target.robustBufferAccess2 = state->robustBufferAccess2;
     target.waveLdsMemoryBarriers = !state->subgroupControlBarriers;
+    target.largePixelFunctionLdsBuffer = state->driverId == VK_DRIVER_ID_NVIDIA_PROPRIETARY;
+    target.pixelFunctionStorageDwords = state->pixelFunctionStorageDwords;
+    target.deviceScopeLdsMemoryBarriers = !state->workgroupScopeFences;
     target.srgbDecodeFormats = state->srgbDecodeFormats & ~state->srgbCopyFormats;
     target.vertexSubgroups = (state->subgroup.supportedStages & VK_SHADER_STAGE_VERTEX_BIT) != 0;
     if (state->meshShader) {
@@ -3931,6 +4017,7 @@ Graphics::Context VulkanDevice::buildContext() const {
     context.drawIndirectFirstInstance = state->drawIndirectFirstInstance;
     context.multiDrawIndirect = state->multiDrawIndirect;
     context.dualSrcBlend = state->dualSrcBlend;
+    context.logicOp = state->logicOp;
     context.depthBounds = state->depthBounds;
     context.depthBiasClamp = state->depthBiasClamp;
     context.samplerFilterMinmax = state->samplerFilterMinmax;
@@ -4005,10 +4092,6 @@ std::optional<std::string> VulkanDevice::KnownDrawRejection(const Graphics::Stat
     return Graphics::KnownValidationFailure(graphicsContext(), shaders, graphics);
 }
 
-void VulkanDevice::DepthCopyPass(const Graphics::DepthCopyPass& pass) {
-    Graphics::RunDepthCopyPass(graphicsContext(), pass);
-}
-
 void VulkanDevice::ColorMetadataPass(const Graphics::ColorMetadataPass& pass) {
     Graphics::RunColorMetadataPass(graphicsContext(), pass);
 }
@@ -4051,7 +4134,7 @@ bool VulkanDevice::PrebuildGraphicsLibraries(const Graphics::ShaderStages& stage
     return Graphics::Pipeline::Prebuild(context, state, Graphics::VertexInputLayout{}, layouts.View(), group);
 }
 
-void VulkanDevice::Draw(const Graphics::State& graphics, const Pm4::DrawParameters& draw, std::span<const Graphics::CompiledShader> shaders, std::span<const Graphics::GuestMemorySnapshot> snapshots, std::shared_ptr<const DrawRecipe>* recipe, std::optional<std::uint64_t> borderColorTable) {
+void VulkanDevice::Draw(const Graphics::State& graphics, const Pm4::DrawParameters& draw, std::span<const Graphics::CompiledShader> shaders, std::span<const Graphics::GuestMemorySnapshot> snapshots, std::shared_ptr<const DrawRecipe>* recipe, std::optional<std::uint64_t> borderColorTable, const DrawTraceContext* trace) {
     startJournalReplay();
     for (const auto& shader : shaders) {
         require(shader.program != nullptr, "missing compiled shader");
@@ -4059,11 +4142,11 @@ void VulkanDevice::Draw(const Graphics::State& graphics, const Pm4::DrawParamete
     }
     // Two stdout lines per draw cost ~1.3 ms per frame of the queue-0 worker (part of it under the
     // GPU mutex); APS5_TRACE_DRAWS=1 restores them.
-    static const bool trace = std::getenv("APS5_TRACE_DRAWS") != nullptr;
-    if (trace) APS5_LOG_OUT("VulkanDevice::Draw indices=%u instances=%u indexSize=%u address=0x%llx shaders=%zu colorTarget=%u", draw.indexCount, draw.instanceCount, draw.indexSize, static_cast<unsigned long long>(draw.indexAddress), shaders.size(), static_cast<unsigned>(graphics.hasColorTarget));
+    static const bool traceDraws = std::getenv("APS5_TRACE_DRAWS") != nullptr;
+    if (traceDraws) APS5_LOG_OUT("VulkanDevice::Draw indices=%u instances=%u indexSize=%u address=0x%llx shaders=%zu colorTarget=%u", draw.indexCount, draw.instanceCount, draw.indexSize, static_cast<unsigned long long>(draw.indexAddress), shaders.size(), static_cast<unsigned>(graphics.hasColorTarget));
     const auto context = Graphics::WithBorderColorTable(graphicsContext(), borderColorTable);
-    Graphics::Draw(context, graphics, draw, shaders, snapshots, recipe);
-    if (trace) APS5_LOG_CHARS_OUT("VulkanDevice::Draw complete");
+    Graphics::Draw(context, graphics, draw, shaders, snapshots, recipe, trace);
+    if (traceDraws) APS5_LOG_CHARS_OUT("VulkanDevice::Draw complete");
 }
 
 bool VulkanDevice::DrawInputsInPlace() const {
@@ -4295,7 +4378,7 @@ struct DispatchCounters {
     std::array<double, DispatchRows> phaseTotals{};
     std::uint64_t profiledDispatches = 0;
     IndirectHold indirectHold;
-    std::uint64_t cacheHits = 0, cacheMisses = 0, cacheInvalidated = 0, templateRefreshed = 0, templateSameWords = 0;
+    std::uint64_t cacheHits = 0, cacheMisses = 0, cacheInvalidated = 0, templateRefreshed = 0, templateSameWords = 0, templateByNumber = 0;
     double templateRevalidateMs = 0;
     std::uint64_t procLookups = 0, preBarriersRecorded = 0, preBarriersSkipped = 0;
     std::chrono::steady_clock::time_point cacheReport = std::chrono::steady_clock::now();
@@ -4612,7 +4695,7 @@ void VulkanDevice::NoteDrawRecipeMiss(DrawRecipePrecheck miss) {
     counters.precheckMisses[miss == DrawRecipePrecheck::NoRecipe ? MissNoRecipe : MissDevice].fetch_add(1, std::memory_order_relaxed);
 }
 
-RecipeOutcome VulkanDevice::DrawFromRecipe(const Graphics::State& graphics, const Pm4::DrawParameters& draw, std::span<const Graphics::CompiledShader> shaders, std::span<const Graphics::GuestMemorySnapshot> snapshots, const std::shared_ptr<const DrawRecipe>& recipe) {
+RecipeOutcome VulkanDevice::DrawFromRecipe(const Graphics::State& graphics, const Pm4::DrawParameters& draw, std::span<const Graphics::CompiledShader> shaders, std::span<const Graphics::GuestMemorySnapshot> snapshots, const std::shared_ptr<const DrawRecipe>& recipe, const DrawTraceContext* trace) {
     PerformanceTimer timing("Vulkan.DrawFromRecipe");
     static const bool profile = std::getenv("APS5_PROFILE_DRAW") != nullptr;
     auto& counters = Recipes().kinds[static_cast<std::size_t>(RecipeKind::Draw)];
@@ -4623,7 +4706,7 @@ RecipeOutcome VulkanDevice::DrawFromRecipe(const Graphics::State& graphics, cons
         return RecipeOutcome::Rebuild;
     }
     const auto context = graphicsContext();
-    const auto outcome = Graphics::DrawWithRecipe(context, graphics, draw, shaders, snapshots, *recipe);
+    const auto outcome = Graphics::DrawWithRecipe(context, graphics, draw, shaders, snapshots, *recipe, trace);
     if (!outcome.recorded) {
         switch (outcome.miss) {
             case Graphics::DrawRecipeMiss::NotRecordable: counters.precheckMisses[MissNotRecordable].fetch_add(1, std::memory_order_relaxed); break;
@@ -4956,6 +5039,7 @@ void VulkanDevice::recordDispatch(RecordedDispatch& record) {
         // after an earlier dispatch's reads of the buffers by that dispatch's trailing barrier. A
         // recipe compares the two 64-bit hashes first: equal hashes mean the buffers hold the words.
         const bool differs = record.dataRefresh == RecordedDispatch::DataRefresh::Words || resources.DataWordsHash() != record.dataWordsHash;
+        if (timer.profile && record.shader->program != nullptr && record.shader->program->bindings.size() != resources.BindingCount()) ++d.templateByNumber;
         if (differs && (record.resourceKeyMatched ? resources.refreshData(commands, *record.shader, &recorder) : resources.RefreshData(commands, *record.shader, &recorder))) {
             covered = 0;
             ++d.templateRefreshed;
@@ -5143,7 +5227,7 @@ std::shared_ptr<ComputePipelineObjects> VulkanDevice::createComputePipeline(cons
     const Graphics::PipelineSpecialization specialization(shader);
     const auto subgroupSize = computeSubgroupSize(shader);
     const auto stageFlags = computeStageFlags(shader);
-    if (const char* directory = std::getenv("APS5_DUMP_COMPUTE_PIPELINES"); directory != nullptr && *directory != '\0' && ComputePipelineCapture::OptionalEnabled() && CaptureComputePipeline(shader.spirv.size())) {
+    if (const auto* directory = ComputePipelineDumpDirectory(); directory != nullptr && *directory != 0 && !state->probingFloatControls && ComputePipelineCapture::OptionalEnabled() && CaptureComputePipeline(shader.spirv.size())) {
         ComputePipelineCapture capture;
         capture.spirv = shader.spirv.Copy();
         ComputeDescriptorSetLayout resourcesLayout;
@@ -5469,7 +5553,7 @@ VulkanDevice::IndirectOutcome VulkanDevice::dispatch(const ShaderRecompiler::Rec
     }
     if (profile && std::chrono::steady_clock::now() - d.cacheReport > std::chrono::seconds(10)) {
         d.cacheReport = std::chrono::steady_clock::now();
-        AgcDriver::ProfilePrint_nid_no_patch("[rescache] (cumulative): %llu hits, %llu misses, %llu invalidated, %zu entries (dispatch + draw); template hits: %llu refreshed the data buffers (revalidate %.1f ms), %llu had the same words; Find calls %llu, Touch calls %llu\n", static_cast<unsigned long long>(d.cacheHits), static_cast<unsigned long long>(d.cacheMisses), static_cast<unsigned long long>(d.cacheInvalidated), state->resourceCache.Size(), static_cast<unsigned long long>(d.templateRefreshed), d.templateRevalidateMs, static_cast<unsigned long long>(d.templateSameWords), static_cast<unsigned long long>(ResourceCache::Finds()), static_cast<unsigned long long>(ResourceCache::Touches()));
+        AgcDriver::ProfilePrint_nid_no_patch("[rescache] (cumulative): %llu hits, %llu misses, %llu invalidated, %zu entries (dispatch + draw); template hits: %llu refreshed the data buffers (revalidate %.1f ms), %llu had the same words, %llu paired their data bindings by number (no image table binding of their own); Find calls %llu, Touch calls %llu\n", static_cast<unsigned long long>(d.cacheHits), static_cast<unsigned long long>(d.cacheMisses), static_cast<unsigned long long>(d.cacheInvalidated), state->resourceCache.Size(), static_cast<unsigned long long>(d.templateRefreshed), d.templateRevalidateMs, static_cast<unsigned long long>(d.templateSameWords), static_cast<unsigned long long>(d.templateByNumber), static_cast<unsigned long long>(ResourceCache::Finds()), static_cast<unsigned long long>(ResourceCache::Touches()));
         AgcDriver::ProfilePrint_nid_no_patch("[vk] deviceProc lookups inside the device call (cumulative): %llu (%.2f per dispatch); pre-dispatch barriers recorded %llu, skipped %llu; compute pipelines created %llu (%llu under the GPU mutex)\n", static_cast<unsigned long long>(d.procLookups), d.profiledDispatches != 0 ? static_cast<double>(d.procLookups) / static_cast<double>(d.profiledDispatches) : 0.0, static_cast<unsigned long long>(d.preBarriersRecorded), static_cast<unsigned long long>(d.preBarriersSkipped), static_cast<unsigned long long>(computePipelinesCreated.load(std::memory_order_relaxed)), static_cast<unsigned long long>(computePipelinesCreatedLocked.load(std::memory_order_relaxed)));
         reportRecipes();
         reportDispatchMove();
